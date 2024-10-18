@@ -7,7 +7,7 @@ from pymongo import MongoClient
 from datetime import datetime, timedelta
 from transformers import pipeline
 
-print("Script version: 4.0")  # Updated version number
+print("Script version: 5.0")  # Updated version number
 
 # Load environment variables
 load_dotenv()
@@ -24,8 +24,8 @@ mongo_client = MongoClient(os.getenv('MONGODB_URI'))
 db = mongo_client[os.getenv('MONGODB_DB')]
 collection = db[os.getenv('MONGODB_COLLECTION')]
 
-# Initialize sentiment analysis pipeline
-sentiment_pipeline = pipeline("sentiment-analysis")
+# Initialize sentiment analysis pipeline with a model that includes neutral sentiment
+sentiment_pipeline = pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest")
 
 def fetch_reddit_posts(keyword):
     """
@@ -96,6 +96,10 @@ def fetch_reddit_posts(keyword):
             print(f"\nReddit API error: {e}")
             print("Waiting for 60 seconds before retrying...")
             time.sleep(60)
+        except Exception as e:
+            print(f"\nUnexpected error: {e}")
+            print("Waiting for 60 seconds before retrying...")
+            time.sleep(60)
 
 def wait_for_rate_limit(start_time):
     """Wait if close to hitting the rate limit."""
@@ -104,6 +108,22 @@ def wait_for_rate_limit(start_time):
         wait_time = 60 - elapsed_time.total_seconds()
         print(f"\nApproaching rate limit. Waiting for {wait_time:.2f} seconds.")
         time.sleep(wait_time)
+
+def display_sentiment_stats():
+    """Display sentiment statistics for collected posts."""
+    sentiment_counts = collection.aggregate([
+        {"$group": {"_id": "$sentiment_label", "count": {"$sum": 1}}}
+    ])
+    total = 0
+    stats = {}
+    for result in sentiment_counts:
+        stats[result['_id']] = result['count']
+        total += result['count']
+    
+    print("\nSentiment Statistics:")
+    for sentiment, count in stats.items():
+        percentage = (count / total) * 100
+        print(f"{sentiment}: {count} ({percentage:.2f}%)")
 
 if __name__ == '__main__':
     search_keyword = input("Enter a keyword to search for: ")
@@ -115,5 +135,6 @@ if __name__ == '__main__':
         fetch_reddit_posts(search_keyword)
     except KeyboardInterrupt:
         print("\nFetching stopped by user.")
+        display_sentiment_stats()
     
     print("\nScript execution ended.")
