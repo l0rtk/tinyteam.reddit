@@ -1,13 +1,14 @@
 import praw
 import os
 import time
+import sys
 from dotenv import load_dotenv
 from prawcore.exceptions import PrawcoreException
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 from transformers import pipeline
 
-print("Script version: 5.0")  # Updated version number
+print("Script version: 6.1")  # Updated version number
 
 # Load environment variables
 load_dotenv()
@@ -126,7 +127,11 @@ def display_sentiment_stats():
         print(f"{sentiment}: {count} ({percentage:.2f}%)")
 
 if __name__ == '__main__':
-    search_keyword = input("Enter a keyword to search for: ")
+    if len(sys.argv) != 2 or not sys.argv[1].startswith("keyword="):
+        print("Usage: python main.py keyword=<search_term>")
+        sys.exit(1)
+    
+    search_keyword = sys.argv[1].split("=", 1)[1]
     
     print(f"Starting continuous fetch for posts containing '{search_keyword}' with sentiment analysis.")
     print(f"Results will be saved to MongoDB. Press Ctrl+C to stop.")
