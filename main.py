@@ -2,23 +2,17 @@ import praw
 import os
 import time
 import sys
+import argparse
 from dotenv import load_dotenv
 from prawcore.exceptions import PrawcoreException
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 from transformers import pipeline
 
-print("Script version: 6.1")  # Updated version number
+print("Script version: 7.0")  # Updated version number
 
-# Load environment variables
+# Load environment variables (for MongoDB connection)
 load_dotenv()
-
-# Initialize Reddit API client
-reddit = praw.Reddit(
-    client_id=os.getenv('REDDIT_CLIENT_ID'),
-    client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
-    user_agent=os.getenv('REDDIT_USER_AGENT')
-)
 
 # Initialize MongoDB client
 mongo_client = MongoClient(os.getenv('MONGODB_URI'))
@@ -28,10 +22,11 @@ collection = db[os.getenv('MONGODB_COLLECTION')]
 # Initialize sentiment analysis pipeline with a model that includes neutral sentiment
 sentiment_pipeline = pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment-latest")
 
-def fetch_reddit_posts(keyword):
+def fetch_reddit_posts(reddit, keyword):
     """
     Continuously fetch Reddit posts based on a keyword, perform sentiment analysis, and save to MongoDB.
     
+    :param reddit: The Reddit API client
     :param keyword: The search term to look for in posts
     """
     start_time = datetime.now()
@@ -127,17 +122,25 @@ def display_sentiment_stats():
         print(f"{sentiment}: {count} ({percentage:.2f}%)")
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2 or not sys.argv[1].startswith("keyword="):
-        print("Usage: python main.py keyword=<search_term>")
-        sys.exit(1)
-    
-    search_keyword = sys.argv[1].split("=", 1)[1]
-    
-    print(f"Starting continuous fetch for posts containing '{search_keyword}' with sentiment analysis.")
+    parser = argparse.ArgumentParser(description="Fetch Reddit posts and perform sentiment analysis.")
+    parser.add_argument("keyword", help="Keyword to search for in Reddit posts")
+    parser.add_argument("--client_id", required=True, help="Reddit API client ID")
+    parser.add_argument("--client_secret", required=True, help="Reddit API client secret")
+    parser.add_argument("--user_agent", required=True, help="Reddit API user agent")
+    args = parser.parse_args()
+
+    # Initialize Reddit API client
+    reddit = praw.Reddit(
+        client_id=args.client_id,
+        client_secret=args.client_secret,
+        user_agent=args.user_agent
+    )
+
+    print(f"Starting continuous fetch for posts containing '{args.keyword}' with sentiment analysis.")
     print(f"Results will be saved to MongoDB. Press Ctrl+C to stop.")
 
     try:
-        fetch_reddit_posts(search_keyword)
+        fetch_reddit_posts(reddit, args.keyword)
     except KeyboardInterrupt:
         print("\nFetching stopped by user.")
         display_sentiment_stats()
