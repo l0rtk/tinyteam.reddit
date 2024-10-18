@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 from prawcore.exceptions import PrawcoreException
 from pymongo import MongoClient
 from datetime import datetime, timedelta
+from transformers import pipeline
 
-print("Script version: 3.1")  # Updated version number
+print("Script version: 4.0")  # Updated version number
 
 # Load environment variables
 load_dotenv()
@@ -23,9 +24,12 @@ mongo_client = MongoClient(os.getenv('MONGODB_URI'))
 db = mongo_client[os.getenv('MONGODB_DB')]
 collection = db[os.getenv('MONGODB_COLLECTION')]
 
+# Initialize sentiment analysis pipeline
+sentiment_pipeline = pipeline("sentiment-analysis")
+
 def fetch_reddit_posts(keyword):
     """
-    Continuously fetch Reddit posts based on a keyword and save to MongoDB.
+    Continuously fetch Reddit posts based on a keyword, perform sentiment analysis, and save to MongoDB.
     
     :param keyword: The search term to look for in posts
     """
@@ -56,6 +60,11 @@ def fetch_reddit_posts(keyword):
                 if existing_post:
                     continue  # Skip this post if it already exists
 
+                # Perform sentiment analysis
+                sentiment_result = sentiment_pipeline(submission.title)[0]
+                sentiment_label = sentiment_result['label']
+                sentiment_score = sentiment_result['score']
+
                 new_posts_added += 1
                 post_data = {
                     'keyword': keyword,
@@ -65,11 +74,13 @@ def fetch_reddit_posts(keyword):
                     'num_comments': submission.num_comments,
                     'created_utc': submission.created_utc,
                     'subreddit': submission.subreddit.display_name,
-                    'id': submission.id
+                    'id': submission.id,
+                    'sentiment_label': sentiment_label,
+                    'sentiment_score': sentiment_score
                 }
                 collection.insert_one(post_data)
 
-                print(f"\rFetched new post: {submission.title[:50]}...", end="", flush=True)
+                print(f"\rFetched new post: {submission.title[:50]}... | Sentiment: {sentiment_label}", end="", flush=True)
 
                 requests_made += 1
                 if requests_made >= 100:
@@ -97,7 +108,7 @@ def wait_for_rate_limit(start_time):
 if __name__ == '__main__':
     search_keyword = input("Enter a keyword to search for: ")
     
-    print(f"Starting continuous fetch for posts containing '{search_keyword}'.")
+    print(f"Starting continuous fetch for posts containing '{search_keyword}' with sentiment analysis.")
     print(f"Results will be saved to MongoDB. Press Ctrl+C to stop.")
 
     try:
